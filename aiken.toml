@@ -1,0 +1,15 @@
+name = "baobabx_gmx"
+version = "1.0.0"
+license = "Apache-2.0"
+description = "GMX v1 style perpetual exchange on Cardano"
+
+[repository]
+user = "baobabX"
+project = "baobabX-smart-contracts"
+platform = "github"
+
+[[dependencies]]
+name = "aiken-lang/stdlib"
+version = "main"
+source = "github"
+
