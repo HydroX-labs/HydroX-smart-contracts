@@ -7,61 +7,107 @@ pub const basis_points_divisor = 10000
 
 pub const price_precision = 1_000_000_000_000_000_000_000_000_000_000  // 1e30
 
-pub const usdg_decimals = 18
-
 pub const funding_rate_precision = 1_000_000
 
 pub const max_fee_basis_points = 500  // 5%
 
 pub const max_liquidation_fee_usd = 100_000_000_000_000_000_000_000_000_000_000  // $100 in 1e30
 
+/// Minimum collateral ratio (1% = 100 basis points)
+pub const min_collateral_ratio_bps = 100  // 1%
+
 /// Calculate fee amount based on basis points
 pub fn calculate_fee(amount: Int, fee_basis_points: Int) -> Int {
   amount * fee_basis_points / basis_points_divisor
 }
 
-/// Get AUM (Assets Under Management) in USD
+/// Get AUM (Assets Under Management) for stablecoin vault
+/// AUM = total_liquidity + pending_pnl
 pub fn get_aum(
-  pool_amounts: List<(AssetClass, Int)>,
-  reserved_amounts: List<(AssetClass, Int)>,
-  guaranteed_usd: List<(AssetClass, Int)>,
-  prices: List<PriceData>,
-  maximize: Bool,
+  total_liquidity: Int,
+  open_interest_long: Int,
+  open_interest_short: Int,
+  guaranteed_usd: Int,
 ) -> Int {
-  let aum =
-    list.foldl(
-      pool_amounts,
-      0,
-      fn(acc, entry) {
-        let (token, pool_amount) = entry
-        
-        when find_price(prices, token) is {
-          Some(price_data) -> {
-            let price = price_data.price
-            let reserved = get_reserved_amount(reserved_amounts, token)
-            let token_aum = ( pool_amount - reserved ) * price / price_precision
-            acc + token_aum
-          }
-          None -> acc
-        }
-      },
-    )
+  // For stablecoin vault:
+  // AUM = stablecoin_liquidity
+  // We assume stablecoin is always worth $1
+  // Pending profits/losses affect AUM but are harder to calculate without prices
+  // Simplified: just use total liquidity
+  total_liquidity
+}
+
+/// Calculate GLP to mint when adding liquidity
+pub fn calculate_glp_mint(
+  stablecoin_amount: Int,
+  total_liquidity: Int,
+  glp_supply: Int,
+  mint_fee_bp: Int,
+) -> Int {
+  // Apply mint fee
+  let after_fee = stablecoin_amount - calculate_fee(stablecoin_amount, mint_fee_bp)
   
-  // Add short positions profit
-  let total_guaranteed =
-    list.foldl(guaranteed_usd, 0, fn(acc, entry) {
-      let (_token, amount) = entry
-      acc + amount
-    })
-  
-  if maximize {
-    aum + total_guaranteed
+  if glp_supply == 0 {
+    // First deposit: 1:1 ratio
+    after_fee
   } else {
-    aum
+    // Subsequent deposits: proportional to pool share
+    // glp = (stablecoin_amount * glp_supply) / total_liquidity
+    after_fee * glp_supply / total_liquidity
   }
 }
 
-/// Find price for a token
+/// Calculate stablecoin to return when burning GLP
+pub fn calculate_stablecoin_redeem(
+  glp_amount: Int,
+  total_liquidity: Int,
+  glp_supply: Int,
+  burn_fee_bp: Int,
+) -> Int {
+  // Calculate proportional stablecoin
+  let stablecoin = glp_amount * total_liquidity / glp_supply
+  
+  // Apply burn fee
+  stablecoin - calculate_fee(stablecoin, burn_fee_bp)
+}
+
+/// Calculate position PnL for long position
+pub fn calculate_long_pnl(
+  size: Int,
+  entry_price: Int,
+  current_price: Int,
+) -> (Bool, Int) {
+  // PnL = size * (current_price - entry_price) / entry_price
+  if current_price >= entry_price {
+    // Profit
+    let pnl = size * ( current_price - entry_price ) / entry_price
+    (True, pnl)
+  } else {
+    // Loss
+    let pnl = size * ( entry_price - current_price ) / entry_price
+    (False, pnl)
+  }
+}
+
+/// Calculate position PnL for short position
+pub fn calculate_short_pnl(
+  size: Int,
+  entry_price: Int,
+  current_price: Int,
+) -> (Bool, Int) {
+  // PnL = size * (entry_price - current_price) / entry_price
+  if entry_price >= current_price {
+    // Profit
+    let pnl = size * ( entry_price - current_price ) / entry_price
+    (True, pnl)
+  } else {
+    // Loss
+    let pnl = size * ( current_price - entry_price ) / entry_price
+    (False, pnl)
+  }
+}
+
+/// Find price for a token from oracle data
 pub fn find_price(prices: List<PriceData>, token: AssetClass) -> Option<PriceData> {
   list.find(
     prices,
@@ -71,32 +117,12 @@ pub fn find_price(prices: List<PriceData>, token: AssetClass) -> Option<PriceDat
   )
 }
 
-/// Get reserved amount for token
-pub fn get_reserved_amount(
-  reserved_amounts: List<(AssetClass, Int)>,
-  token: AssetClass,
-) -> Int {
-  when
-    list.find(
-      reserved_amounts,
-      fn(entry) {
-        let (t, _amount) = entry
-        t.policy_id == token.policy_id && t.asset_name == token.asset_name
-      },
-    )
-  is {
-    Some((_token, amount)) -> amount
-    None -> 0
-  }
-}
-
-/// Calculate position fee
+/// Calculate position fee (margin fee)
 pub fn get_position_fee(size_delta: Int, margin_fee_basis_points: Int) -> Int {
   if size_delta == 0 {
     0
   } else {
-    let after_fee_usd = size_delta * ( basis_points_divisor - margin_fee_basis_points ) / basis_points_divisor
-    size_delta - after_fee_usd
+    calculate_fee(size_delta, margin_fee_basis_points)
   }
 }
 
@@ -113,6 +139,7 @@ pub fn get_funding_fee(
     if funding_rate == 0 {
       0
     } else {
+      // funding_fee = size * funding_rate / precision
       size * funding_rate / funding_rate_precision
     }
   }
@@ -128,52 +155,83 @@ pub fn validate_liquidation(
   delta: Int,
   liquidation_fee_usd: Int,
 ) -> Bool {
-  let fees = margin_fees + funding_fees + liquidation_fee_usd
+  let total_fees = margin_fees + funding_fees + liquidation_fee_usd
   
   if !has_profit && position_collateral < delta {
-    // Loss exceeds collateral
+    // Loss exceeds collateral - definitely liquidatable
     True
   } else {
+    // Calculate remaining collateral after PnL and fees
     let remaining_collateral =
       if has_profit {
-        position_collateral + delta
+        position_collateral + delta - total_fees
       } else {
-        position_collateral - delta
+        position_collateral - delta - total_fees
       }
     
-    remaining_collateral < fees || remaining_collateral * basis_points_divisor < position_size * 10000
+    // Check if collateral ratio is below minimum
+    // collateral_ratio = remaining_collateral / position_size
+    if remaining_collateral <= 0 {
+      True
+    } else {
+      // Check minimum collateral ratio (e.g., 1%)
+      remaining_collateral * basis_points_divisor < position_size * min_collateral_ratio_bps
+    }
   }
 }
 
-/// Update list entry
-pub fn update_list_entry(
-  list_data: List<(AssetClass, Int)>,
-  token: AssetClass,
-  new_value: Int,
-) -> List<(AssetClass, Int)> {
-  list.map(
-    list_data,
-    fn(entry) {
-      let (t, value) = entry
-      if t.policy_id == token.policy_id && t.asset_name == token.asset_name {
-        (t, new_value)
-      } else {
-        entry
-      }
-    },
-  )
-}
-
-/// Adjust for decimals (token decimals to USD decimals)
-pub fn adjust_for_decimals(
-  amount: Int,
-  token_decimals: Int,
-  usd_decimals: Int,
-) -> Int {
-  if token_decimals > usd_decimals {
-    amount / math.pow(10, token_decimals - usd_decimals)
+/// Calculate leverage of a position
+pub fn calculate_leverage(size: Int, collateral: Int) -> Int {
+  if collateral == 0 {
+    0
   } else {
-    amount * math.pow(10, usd_decimals - token_decimals)
+    // leverage = size / collateral
+    // Return as integer (e.g., 10 for 10x)
+    size / collateral
   }
 }
 
+/// Validate leverage is within limits
+pub fn validate_leverage(size: Int, collateral: Int, max_leverage: Int) -> Bool {
+  let leverage = calculate_leverage(size, collateral)
+  leverage > 0 && leverage <= max_leverage
+}
+
+/// Calculate funding rate based on open interest imbalance
+pub fn calculate_funding_rate(
+  open_interest_long: Int,
+  open_interest_short: Int,
+  time_delta: Int,  // Time elapsed in milliseconds
+  funding_rate_factor: Int,  // Base funding rate (e.g., 0.01% per hour)
+) -> Int {
+  let total_open_interest = open_interest_long + open_interest_short
+  
+  if total_open_interest == 0 {
+    0
+  } else {
+    // imbalance = (long - short) / (long + short)
+    // funding_rate = imbalance * time_delta * factor
+    let imbalance = open_interest_long - open_interest_short
+    imbalance * time_delta * funding_rate_factor / total_open_interest / funding_rate_precision
+  }
+}
+
+/// Check if pool has enough available liquidity
+pub fn has_sufficient_liquidity(
+  total_liquidity: Int,
+  reserved_amount: Int,
+  required_amount: Int,
+) -> Bool {
+  let available = total_liquidity - reserved_amount
+  available >= required_amount
+}
+
+/// Calculate pool utilization rate
+pub fn calculate_utilization_rate(total_liquidity: Int, reserved_amount: Int) -> Int {
+  if total_liquidity == 0 {
+    0
+  } else {
+    // Return as basis points (10000 = 100%)
+    reserved_amount * basis_points_divisor / total_liquidity
+  }
+}
