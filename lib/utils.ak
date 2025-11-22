@@ -21,18 +21,100 @@ pub fn calculate_fee(amount: Int, fee_basis_points: Int) -> Int {
   amount * fee_basis_points / basis_points_divisor
 }
 
+/// Get total reserved amount across all tokens
+pub fn get_total_reserved(reserved_amounts: List<(AssetClass, Int)>) -> Int {
+  list.foldl(
+    reserved_amounts,
+    0,
+    fn(acc, entry) {
+      let (_token, amount) = entry
+      acc + amount
+    },
+  )
+}
+
+/// Get reserved amount for specific token
+pub fn get_reserved_for_token(
+  reserved_amounts: List<(AssetClass, Int)>,
+  token: AssetClass,
+) -> Int {
+  when
+    list.find(
+      reserved_amounts,
+      fn(entry) {
+        let (t, _amount) = entry
+        t.policy_id == token.policy_id && t.asset_name == token.asset_name
+      },
+    )
+  is {
+    Some((_t, amount)) -> amount
+    None -> 0
+  }
+}
+
+/// Get open interest for specific token and direction
+pub fn get_open_interest(
+  open_interest_list: List<(AssetClass, Int)>,
+  token: AssetClass,
+) -> Int {
+  when
+    list.find(
+      open_interest_list,
+      fn(entry) {
+        let (t, _amount) = entry
+        t.policy_id == token.policy_id && t.asset_name == token.asset_name
+      },
+    )
+  is {
+    Some((_t, amount)) -> amount
+    None -> 0
+  }
+}
+
+/// Update list entry for token
+pub fn update_token_entry(
+  list_data: List<(AssetClass, Int)>,
+  token: AssetClass,
+  new_value: Int,
+) -> List<(AssetClass, Int)> {
+  // Check if token exists
+  let exists =
+    list.any(
+      list_data,
+      fn(entry) {
+        let (t, _v) = entry
+        t.policy_id == token.policy_id && t.asset_name == token.asset_name
+      },
+    )
+  
+  if exists {
+    // Update existing entry
+    list.map(
+      list_data,
+      fn(entry) {
+        let (t, value) = entry
+        if t.policy_id == token.policy_id && t.asset_name == token.asset_name {
+          (t, new_value)
+        } else {
+          entry
+        }
+      },
+    )
+  } else {
+    // Add new entry
+    list.concat(list_data, [(token, new_value)])
+  }
+}
+
 /// Get AUM (Assets Under Management) for stablecoin vault
 /// AUM = total_liquidity + pending_pnl
 pub fn get_aum(
   total_liquidity: Int,
-  open_interest_long: Int,
-  open_interest_short: Int,
-  guaranteed_usd: Int,
+  reserved_amounts: List<(AssetClass, Int)>,
 ) -> Int {
   // For stablecoin vault:
   // AUM = stablecoin_liquidity
   // We assume stablecoin is always worth $1
-  // Pending profits/losses affect AUM but are harder to calculate without prices
   // Simplified: just use total liquidity
   total_liquidity
 }
@@ -197,8 +279,8 @@ pub fn validate_leverage(size: Int, collateral: Int, max_leverage: Int) -> Bool 
   leverage > 0 && leverage <= max_leverage
 }
 
-/// Calculate funding rate based on open interest imbalance
-pub fn calculate_funding_rate(
+/// Calculate funding rate based on open interest imbalance for a specific token
+pub fn calculate_funding_rate_for_token(
   open_interest_long: Int,
   open_interest_short: Int,
   time_delta: Int,  // Time elapsed in milliseconds
@@ -213,6 +295,25 @@ pub fn calculate_funding_rate(
     // funding_rate = imbalance * time_delta * factor
     let imbalance = open_interest_long - open_interest_short
     imbalance * time_delta * funding_rate_factor / total_open_interest / funding_rate_precision
+  }
+}
+
+/// Get cumulative funding rate for a specific token
+pub fn get_cumulative_funding_rate(
+  funding_rates: List<(AssetClass, Int)>,
+  token: AssetClass,
+) -> Int {
+  when
+    list.find(
+      funding_rates,
+      fn(entry) {
+        let (t, _rate) = entry
+        t.policy_id == token.policy_id && t.asset_name == token.asset_name
+      },
+    )
+  is {
+    Some((_t, rate)) -> rate
+    None -> 0
   }
 }
 

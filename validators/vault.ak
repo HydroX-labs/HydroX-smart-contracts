@@ -132,34 +132,59 @@ fn validate_increase_position(
   is_long: Bool,
   ctx: ScriptContext,
 ) -> Bool {
-  // Validate inputs
+  // 1. Validate inputs
   let valid_amounts = collateral_delta > 0 && size_delta > 0
   
-  // TODO: Get index token price from oracle
+  // 2. Check token is whitelisted
+  let is_whitelisted =
+    list.any(
+      datum.whitelisted_tokens,
+      fn(t) {
+        t.policy_id == index_token.policy_id && t.asset_name == index_token.asset_name
+      },
+    )
   
-  // TODO: Calculate leverage
-  // leverage = size_delta / collateral_delta
-  // Verify: leverage <= max_leverage
+  // 3. Calculate leverage and validate
+  let leverage = size_delta / collateral_delta
+  let valid_leverage = leverage > 0 && leverage <= datum.max_leverage
   
-  // TODO: Calculate margin fee
+  // 4. Calculate margin fee
   let margin_fee = utils.get_position_fee(size_delta, datum.margin_fee_basis_points)
   
-  // TODO: Verify user deposited collateral_delta + margin_fee in stablecoin
+  // 5. Get current reserved amount for this token
+  let current_reserved = utils.get_reserved_for_token(datum.reserved_amounts, index_token)
+  let new_reserved = current_reserved + collateral_delta
   
-  // TODO: Update or create position datum
-  // If position exists: add to existing
-  // If new: create new position UTXO
+  // 6. Check token-specific utilization
+  // Get max utilization for this token (if not set, use default 80%)
+  let max_util =
+    when
+      list.find(
+        datum.max_utilization,
+        fn(entry) {
+          let (t, _u) = entry
+          t.policy_id == index_token.policy_id && t.asset_name == index_token.asset_name
+        },
+      )
+    is {
+      Some((_t, util)) -> util
+      None -> 8000  // Default 80%
+    }
   
-  // TODO: Update vault state:
-  // - Increase reserved_amount by collateral_delta
-  // - Increase open_interest_long or open_interest_short by size_delta
-  // - If short: increase guaranteed_usd
+  let utilization = new_reserved * 10000 / datum.total_liquidity
+  let valid_utilization = utilization <= max_util
   
-  // TODO: Check utilization is not too high
-  // utilization = reserved_amount / total_liquidity
-  // Should be < 100%
+  // 7. TODO: Verify user deposited collateral_delta + margin_fee in stablecoin
   
-  valid_amounts
+  // 8. TODO: Update or create position datum
+  
+  // 9. TODO: Update vault state (per-token):
+  // - Update reserved_amounts for index_token
+  // - Update open_interest_long or open_interest_short for index_token
+  // - If short: update guaranteed_usd for index_token
+  // - Update total_liquidity (add margin_fee)
+  
+  valid_amounts && is_whitelisted && valid_leverage && valid_utilization
 }
 
 /// Validate decrease position (close or reduce position)
@@ -264,23 +289,30 @@ fn validate_update_funding_rate(datum: VaultDatum, ctx: ScriptContext) -> Bool {
   // Anyone can call this (permissionless funding rate updates)
   // or restrict to admin/keeper if preferred
   
-  // TODO: Calculate time elapsed since last update
-  // time_delta = current_time - last_funding_time
-  
-  // TODO: Calculate funding rate based on open interest imbalance
-  // If open_interest_long > open_interest_short:
-  //   - Longs pay shorts (positive funding rate for longs)
-  // If open_interest_short > open_interest_long:
-  //   - Shorts pay longs (negative funding rate for longs)
-  // 
-  // funding_rate = (open_interest_long - open_interest_short) 
-  //                / (open_interest_long + open_interest_short)
-  //                * time_delta * funding_rate_factor
-  
-  // TODO: Update vault datum:
-  // - Update cumulative_funding_rate_long
-  // - Update cumulative_funding_rate_short
-  // - Update last_funding_time
+  // TODO: For each whitelisted token:
+  //
+  // 1. Get current time
+  // let current_time = get_tx_validity_range_start(ctx)
+  //
+  // 2. Get last funding time for this token
+  // let last_time = get_last_funding_time(datum.last_funding_times, token)
+  // let time_delta = current_time - last_time
+  //
+  // 3. Get open interest for this token
+  // let oi_long = get_open_interest(datum.open_interest_long, token)
+  // let oi_short = get_open_interest(datum.open_interest_short, token)
+  //
+  // 4. Calculate funding rate for this token
+  // funding_rate = calculate_funding_rate(oi_long, oi_short, time_delta, factor)
+  //
+  // 5. Update cumulative funding rates
+  // new_cumulative_long = current + funding_rate
+  // new_cumulative_short = current - funding_rate
+  //
+  // 6. Update vault datum lists:
+  // - cumulative_funding_rate_long (per token)
+  // - cumulative_funding_rate_short (per token)
+  // - last_funding_times (per token)
   
   True
 }

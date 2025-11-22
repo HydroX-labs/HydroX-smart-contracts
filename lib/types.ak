@@ -25,26 +25,34 @@ pub type Position {
   last_increased_time: Int,
 }
 
-/// Vault state datum - Stablecoin only version
+/// Vault state datum - Stablecoin pool with multi-asset positions
 pub type VaultDatum {
   // Stablecoin used (e.g., USDC, USDT, or Cardano stablecoin)
   stablecoin: AssetClass,
   // Total stablecoin liquidity in pool
   total_liquidity: Int,
-  // Reserved amount for open positions
-  reserved_amount: Int,
-  // Guaranteed USD values for short positions
-  guaranteed_usd: Int,
-  // Cumulative funding rate for longs
-  cumulative_funding_rate_long: Int,
-  // Cumulative funding rate for shorts
-  cumulative_funding_rate_short: Int,
-  // Last funding update time
-  last_funding_time: Int,
-  // Open interest (total position size) for longs
-  open_interest_long: Int,
-  // Open interest (total position size) for shorts
-  open_interest_short: Int,
+  
+  // Per-token tracking (for BTC, ETH, ADA, etc.)
+  // Reserved stablecoin amount per token (for open positions)
+  reserved_amounts: List<(AssetClass, Int)>,
+  // Guaranteed USD values per token (for short positions)
+  guaranteed_usd: List<(AssetClass, Int)>,
+  // Open interest (total position size) for longs per token
+  open_interest_long: List<(AssetClass, Int)>,
+  // Open interest (total position size) for shorts per token
+  open_interest_short: List<(AssetClass, Int)>,
+  // Cumulative funding rate for longs per token
+  cumulative_funding_rate_long: List<(AssetClass, Int)>,
+  // Cumulative funding rate for shorts per token
+  cumulative_funding_rate_short: List<(AssetClass, Int)>,
+  // Last funding update time per token
+  last_funding_times: List<(AssetClass, Int)>,
+  
+  // Whitelisted index tokens (BTC, ETH, ADA, etc.)
+  whitelisted_tokens: List<AssetClass>,
+  // Max utilization per token (basis points, e.g., 8000 = 80%)
+  max_utilization: List<(AssetClass, Int)>,
+  
   // Admin public key hash
   admin: Hash<Blake2b_224, VerificationKey>,
   // Fee basis points (1 basis point = 0.01%)
