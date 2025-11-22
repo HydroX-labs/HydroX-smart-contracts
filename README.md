@@ -7,6 +7,17 @@ GMX v1 스타일의 탈중앙화 영구선물 거래소를 Cardano Aiken으로 �
 - 모든 포지션의 담보는 스테이블 코인으로만 예치
 - 구조가 단순하고 가격 변동성 리스크 최소화
 
+## 📚 Documentation
+
+**전체 문서는 [`docs/`](docs/) 디렉토리를 참조하세요.**
+
+**Quick Links:**
+- [프로젝트 컨셉](docs/01-concept.md)
+- [아키텍처 개요](docs/02-architecture.md)
+- [핵심 로직](docs/03-core-logic.md)
+- [구현 가이드](docs/04-implementation.md)
+- [GMX v1 비교](docs/06-comparison.md)
+
 ## 🏗️ 아키텍처
 
 ### 핵심 컴포넌트
@@ -249,15 +260,24 @@ aiken test
 
 ```
 baobabX-smart-contracts/
-├── aiken.toml                 # 프로젝트 설정
+├── docs/                      # 📚 Documentation
+│   ├── README.md              # Documentation index
+│   ├── 01-concept.md          # Project concept
+│   ├── 02-architecture.md     # Architecture overview
+│   ├── 03-core-logic.md       # Core mechanics
+│   ├── 04-implementation.md   # Implementation guide
+│   ├── 06-comparison.md       # GMX v1 comparison
+│   ├── multi-asset-design.md  # Multi-asset design details
+│   └── offchain-services.md   # Off-chain architecture
 ├── lib/
-│   ├── types.ak              # 데이터 타입 정의
-│   └── utils.ak              # 유틸리티 함수
+│   ├── types.ak               # Data type definitions
+│   └── utils.ak               # Utility functions
 ├── validators/
-│   ├── vault.ak              # Vault 검증자 (메인 로직)
-│   ├── position.ak           # Position 검증자
-│   └── oracle.ak             # Oracle 검증자
-└── README.md                 # 이 파일
+│   ├── vault.ak               # Vault validator (main)
+│   ├── position.ak            # Position validator
+│   └── oracle.ak              # Oracle validator
+├── aiken.toml                 # Aiken project config
+└── README.md                  # This file
 ```
 
 ## 🔥 주요 기능 시나리오
