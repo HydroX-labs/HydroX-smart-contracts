@@ -1,11 +1,15 @@
 use aiken/transaction.{ScriptContext, Spend, InlineDatum}
+use aiken/transaction/credential.{ScriptCredential}
 use aiken/transaction/value
 use aiken/list
 use baobabx_gmx/types.{
   VaultDatum, VaultRedeemer, AssetClass, AddLiquidity, RemoveLiquidity,
   IncreasePosition, DecreasePosition, LiquidatePosition, UpdateFees, UpdateFundingRate,
 }
-use baobabx_gmx/utils
+use baobabx_gmx/common
+use baobabx_gmx/vault_utils
+use baobabx_gmx/position_utils
+use baobabx_gmx/constants.{max_fee_basis_points, max_liquidation_fee_usd}
 
 /// Vault validator - manages stablecoin liquidity pool and positions
 validator {
@@ -149,10 +153,10 @@ fn validate_increase_position(
   let valid_leverage = leverage > 0 && leverage <= datum.max_leverage
   
   // 4. Calculate margin fee
-  let margin_fee = utils.get_position_fee(size_delta, datum.margin_fee_basis_points)
+  let margin_fee = position_utils.get_position_fee(size_delta, datum.margin_fee_basis_points)
   
   // 5. Get current reserved amount for this token
-  let current_reserved = utils.get_reserved_for_token(datum.reserved_amounts, index_token)
+  let current_reserved = common.get_reserved_for_token(datum.reserved_amounts, index_token)
   let new_reserved = current_reserved + collateral_delta
   
   // 6. Check token-specific utilization
@@ -208,7 +212,7 @@ fn validate_decrease_position(
   // For short: PnL = size * (entry_price - current_price) / entry_price
   
   // TODO: Calculate fees
-  let margin_fee = utils.get_position_fee(size_delta, datum.margin_fee_basis_points)
+  let margin_fee = position_utils.get_position_fee(size_delta, datum.margin_fee_basis_points)
   // Calculate funding fee based on time held
   
   // TODO: Calculate payout
@@ -246,7 +250,7 @@ fn validate_liquidate_position(
   // TODO: Calculate position PnL and fees
   
   // TODO: Verify position should be liquidated
-  // Use utils.validate_liquidation
+  // Use position_utils.validate_liquidation
   // Position is liquidatable if:
   // - Losses exceed collateral
   // - Collateral ratio below threshold (e.g., < 1%)
@@ -268,20 +272,55 @@ fn validate_liquidate_position(
 
 /// Validate fee update (admin only)
 fn validate_update_fees(datum: VaultDatum, ctx: ScriptContext) -> Bool {
-  // Verify admin signature
+  // 1. Verify admin signature
   let has_admin_sig =
     list.any(
       ctx.transaction.extra_signatories,
       fn(sig) { sig == datum.admin },
     )
   
-  // TODO: Verify new fees are within acceptable ranges
-  // mint_burn_fee_basis_points <= max_fee (e.g., 500 = 5%)
-  // margin_fee_basis_points <= max_fee
+  // 2. Find output vault UTXO
+  expect Some(own_output) =
+    list.find(
+      ctx.transaction.outputs,
+      fn(output) {
+        when output.address.payment_credential is {
+          ScriptCredential(_) -> True
+          _ -> False
+        }
+      },
+    )
   
-  // TODO: Update vault datum with new fees
+  // 3. Parse output datum
+  expect InlineDatum(output_data) = own_output.datum
+  expect output_datum: VaultDatum = output_data
   
-  has_admin_sig
+  // 4. Verify new fees are within acceptable ranges
+  let mint_burn_fee_valid = 
+    output_datum.mint_burn_fee_basis_points >= 0 && 
+    output_datum.mint_burn_fee_basis_points <= max_fee_basis_points
+  
+  let margin_fee_valid = 
+    output_datum.margin_fee_basis_points >= 0 && 
+    output_datum.margin_fee_basis_points <= max_fee_basis_points
+  
+  let liquidation_fee_valid = 
+    output_datum.liquidation_fee_usd > 0 && 
+    output_datum.liquidation_fee_usd <= max_liquidation_fee_usd
+  
+  // 5. Verify other fields remain unchanged
+  let liquidity_unchanged = output_datum.total_liquidity == datum.total_liquidity
+  let glp_supply_unchanged = output_datum.glp_supply == datum.glp_supply
+  let admin_unchanged = output_datum.admin == datum.admin
+  
+  // All checks must pass
+  has_admin_sig &&
+  mint_burn_fee_valid &&
+  margin_fee_valid &&
+  liquidation_fee_valid &&
+  liquidity_unchanged &&
+  glp_supply_unchanged &&
+  admin_unchanged
 }
 
 /// Validate funding rate update

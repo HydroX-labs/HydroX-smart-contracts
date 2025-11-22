@@ -3,6 +3,7 @@ use aiken/transaction/value
 use aiken/list
 use aiken/dict
 use baobabx_gmx/types.{VaultDatum, VaultRedeemer, AddLiquidity, RemoveLiquidity}
+use baobabx_gmx/vault_utils
 
 /// GLP Token Minting Policy
 /// This policy ensures GLP tokens can only be minted/burned by the Vault
@@ -68,10 +69,10 @@ fn validate_add_liquidity(
   glp_minted: Int,
 ) -> Bool {
   // Calculate expected GLP amount
-  let expected_glp = calculate_glp_mint_amount(
+  let expected_glp = vault_utils.calculate_glp_mint(
+    stablecoin_added,
     input_datum.total_liquidity,
     input_datum.glp_supply,
-    stablecoin_added,
     input_datum.mint_burn_fee_basis_points,
   )
   
@@ -95,10 +96,10 @@ fn validate_remove_liquidity(
   glp_burned: Int,
 ) -> Bool {
   // Calculate expected stablecoin withdrawal
-  let expected_stablecoin = calculate_stablecoin_withdrawal_amount(
+  let expected_stablecoin = vault_utils.calculate_stablecoin_redeem(
+    glp_to_burn,
     input_datum.total_liquidity,
     input_datum.glp_supply,
-    glp_to_burn,
     input_datum.mint_burn_fee_basis_points,
   )
   
@@ -112,44 +113,6 @@ fn validate_remove_liquidity(
   glp_burned == -glp_to_burn && 
   glp_supply_decreased && 
   liquidity_decreased_correctly
-}
-
-/// Calculate GLP amount to mint when adding liquidity
-fn calculate_glp_mint_amount(
-  total_liquidity: Int,
-  glp_supply: Int,
-  stablecoin_amount: Int,
-  fee_basis_points: Int,
-) -> Int {
-  let basis_points_divisor = 10000
-  
-  // Apply minting fee
-  let after_fee = stablecoin_amount - (stablecoin_amount * fee_basis_points / basis_points_divisor)
-  
-  // Calculate GLP amount
-  if glp_supply == 0 {
-    // Initial mint: 1:1 ratio
-    after_fee
-  } else {
-    // Proportional to existing supply
-    after_fee * glp_supply / total_liquidity
-  }
-}
-
-/// Calculate stablecoin amount to return when burning GLP
-fn calculate_stablecoin_withdrawal_amount(
-  total_liquidity: Int,
-  glp_supply: Int,
-  glp_amount: Int,
-  fee_basis_points: Int,
-) -> Int {
-  let basis_points_divisor = 10000
-  
-  // Calculate proportional stablecoin
-  let stablecoin_amount = glp_amount * total_liquidity / glp_supply
-  
-  // Apply burning fee
-  stablecoin_amount - (stablecoin_amount * fee_basis_points / basis_points_divisor)
 }
 
 /// Get GLP amount from minted value (positive = mint, negative = burn)
