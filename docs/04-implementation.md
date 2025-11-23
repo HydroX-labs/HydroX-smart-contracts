@@ -8,9 +8,15 @@
 baobabX-smart-contracts/
 ├── lib/
 │   ├── types.ak          # Type definitions
-│   └── utils.ak          # Utility functions
+│   ├── constants.ak      # Global constants
+│   ├── common.ak         # Common utilities (NFT helpers)
+│   ├── vault_utils.ak    # Vault-specific utilities
+│   ├── position_utils.ak # Position-specific utilities
+│   └── oracle_utils.ak   # Oracle-specific utilities
 └── validators/
-    ├── vault.ak          # Vault validator
+    ├── vault.ak          # Vault spending validator
+    ├── vault_nft.ak      # Vault NFT minting policy
+    ├── glp_policy.ak     # GLP token minting policy
     ├── position.ak       # Position validator
     └── oracle.ak         # Oracle validator
 ```
@@ -22,6 +28,9 @@ baobabX-smart-contracts/
 ```aiken
 // lib/types.ak
 pub type VaultDatum {
+  // Vault identification (unique NFT)
+  vault_nft: AssetClass,
+  
   // Single stablecoin
   stablecoin: AssetClass,
   total_liquidity: Int,
@@ -62,6 +71,73 @@ pub type Position {
   average_price: Int,
   entry_funding_rate: Int,
   last_increased_time: Int,
+}
+```
+
+## NFT-Based Vault Identification
+
+### Vault NFT Policy
+
+Vault의 고유성을 보장하기 위한 one-time NFT minting:
+
+```aiken
+// validators/vault_nft.ak
+
+minting {
+  fn vault_nft_policy(utxo_ref: OutputReference, ctx: ScriptContext) -> Bool {
+    expect Mint(own_policy_id) = ctx.purpose
+    
+    // Rule 1: 지정된 UTXO가 반드시 소비되어야 함
+    let has_required_utxo = list.any(
+      ctx.transaction.inputs,
+      fn(input) { input.output_reference == utxo_ref }
+    )
+    
+    // Rule 2: 정확히 1개의 NFT만 발행
+    let total_minted = get_total_minted(ctx.transaction.mint, own_policy_id)
+    let is_single_nft = total_minted == 1
+    
+    has_required_utxo && is_single_nft
+  }
+}
+```
+
+**사용 흐름:**
+1. 관리자가 초기화 UTXO 선택 (예: `abc123#0`)
+2. 이 UTXO를 참조하여 `vault_nft.ak` 컴파일
+3. 트랜잭션에서:
+   - `abc123#0` 소비
+   - Vault NFT 1개 발행
+   - Vault UTXO 생성 (NFT 포함)
+4. **재발행 불가**: 동일한 UTXO는 다시 소비할 수 없음
+
+### NFT Validation Utilities
+
+```aiken
+// lib/common.ak
+
+/// Check if an output contains exactly 1 of the specified NFT
+pub fn has_nft(output: Output, nft: AssetClass) -> Bool {
+  value.quantity_of(output.value, nft.policy_id, nft.asset_name) == 1
+}
+
+/// Find input containing the NFT
+pub fn find_input_with_nft(
+  inputs: List<Input>, 
+  nft: AssetClass
+) -> Option<Input> {
+  list.find(inputs, fn(input) { has_nft(input.output, nft) })
+}
+
+/// Validate NFT is preserved (input → output)
+pub fn validate_nft_preserved(
+  inputs: List<Input>,
+  outputs: List<Output>,
+  nft: AssetClass,
+) -> Bool {
+  let has_input = find_input_with_nft(inputs, nft) != None
+  let has_output = find_output_with_nft(outputs, nft) != None
+  has_input && has_output
 }
 ```
 
@@ -201,7 +277,17 @@ validator {
   ) -> Bool {
     when ctx.purpose is {
       Spend(_) -> {
-        when redeemer is {
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // CRITICAL: NFT preservation check
+        // Ensures we're interacting with the correct Vault
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        let nft_preserved = common.validate_nft_preserved(
+          ctx.transaction.inputs,
+          ctx.transaction.outputs,
+          datum.vault_nft,
+        )
+        
+        let redeemer_valid = when redeemer is {
           AddLiquidity { amount } ->
             validate_add_liquidity(datum, amount, ctx)
           
@@ -217,6 +303,8 @@ validator {
           
           // ... other redeemers
         }
+        
+        nft_preserved && redeemer_valid
       }
       _ -> False
     }
@@ -402,17 +490,64 @@ const basis_points_divisor = 10000
 // Let transaction fail gracefully
 ```
 
+## GLP Token Policy
+
+GLP 발행은 **반드시 Vault와 연동**되어야 합니다:
+
+```aiken
+// validators/glp_policy.ak
+
+minting {
+  fn glp_policy(vault_nft: AssetClass, ctx: ScriptContext) -> Bool {
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Find Vault by NFT (not by script address!)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    let vault_input = common.find_input_with_nft(
+      ctx.transaction.inputs, vault_nft
+    )
+    let vault_output = common.find_output_with_nft(
+      ctx.transaction.outputs, vault_nft
+    )
+    
+    when (vault_input, vault_output) is {
+      (Some(input), Some(output)) -> {
+        let input_datum = parse_vault_datum(input.output.datum)
+        let output_datum = parse_vault_datum(output.datum)
+        let vault_redeemer = get_vault_redeemer(...)
+        
+        when vault_redeemer is {
+          Some(AddLiquidity { amount }) ->
+            validate_add_liquidity(input_datum, output_datum, ...)
+          
+          Some(RemoveLiquidity { glp_amount }) ->
+            validate_remove_liquidity(input_datum, output_datum, ...)
+          
+          _ -> False
+        }
+      }
+      _ -> False  // Vault must be involved
+    }
+  }
+}
+```
+
+**핵심 로직:**
+- ✅ NFT로 정확한 Vault 찾기
+- ✅ Vault의 AddLiquidity/RemoveLiquidity만 허용
+- ✅ GLP 발행량 검증 (AUM 기반)
+
 ## Security Considerations
 
 ### Critical Checks
 
-1. **Owner verification**: Always check signatures
-2. **Amount validation**: Positive, non-zero
-3. **Token whitelist**: Only allowed tokens
-4. **Leverage limits**: Enforce max_leverage
-5. **Utilization limits**: Per-token max_utilization
-6. **Fee calculation**: Correct and consistent
-7. **State transitions**: Valid vault updates
+1. **NFT verification**: Vault NFT must be preserved ✨
+2. **Owner verification**: Always check signatures
+3. **Amount validation**: Positive, non-zero
+4. **Token whitelist**: Only allowed tokens
+5. **Leverage limits**: Enforce max_leverage
+6. **Utilization limits**: Per-token max_utilization
+7. **Fee calculation**: Correct and consistent
+8. **State transitions**: Valid vault updates
 
 ### Attack Vectors
 

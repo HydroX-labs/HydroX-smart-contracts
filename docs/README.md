@@ -108,11 +108,21 @@ baobabX-smart-contracts/
 │   └── offchain-services.md
 ├── lib/                           # Aiken library code
 │   ├── types.ak                   # Type definitions
-│   └── utils.ak                   # Utility functions
+│   ├── constants.ak               # Global constants
+│   ├── common.ak                  # Common utilities (inc. NFT helpers)
+│   ├── vault_utils.ak             # Vault-specific utilities
+│   ├── position_utils.ak          # Position-specific utilities
+│   └── oracle_utils.ak            # Oracle-specific utilities
 ├── validators/                    # Smart contract validators
-│   ├── vault.ak                   # Vault validator
+│   ├── vault.ak                   # Vault validator (spending)
+│   ├── vault_nft.ak               # Vault NFT policy (minting)
+│   ├── glp_policy.ak              # GLP token policy (minting)
 │   ├── position.ak                # Position validator
 │   └── oracle.ak                  # Oracle validator
+├── offchain/                      # Off-chain services (TypeScript)
+│   ├── src/                       # Source code
+│   ├── tests/                     # Unit & integration tests
+│   └── package.json               # Dependencies
 ├── aiken.toml                     # Aiken project config
 └── README.md                      # Main README
 ```

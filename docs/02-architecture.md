@@ -63,11 +63,23 @@
 │  │  Smart Contracts (Aiken)                               │ │
 │  │                                                         │ │
 │  │  ┌──────────────────────────────────────────────────┐ │ │
-│  │  │  Vault Validator                                  │ │ │
+│  │  │  Vault Validator (Spending)                      │ │ │
 │  │  │  - Main liquidity pool logic                      │ │ │
 │  │  │  - Position management                            │ │ │
-│  │  │  - GLP minting/burning                            │ │ │
 │  │  │  - Fee distribution                               │ │ │
+│  │  │  - NFT preservation check                         │ │ │
+│  │  └──────────────────────────────────────────────────┘ │ │
+│  │                                                         │ │
+│  │  ┌──────────────────────────────────────────────────┐ │ │
+│  │  │  Vault NFT Policy (Minting)                       │ │ │
+│  │  │  - One-time NFT mint                              │ │ │
+│  │  │  - Vault UTXO identification                      │ │ │
+│  │  └──────────────────────────────────────────────────┘ │ │
+│  │                                                         │ │
+│  │  ┌──────────────────────────────────────────────────┐ │ │
+│  │  │  GLP Token Policy (Minting)                       │ │ │
+│  │  │  - GLP minting/burning                            │ │ │
+│  │  │  - Vault coordination                             │ │ │
 │  │  └──────────────────────────────────────────────────┘ │ │
 │  │                                                         │ │
 │  │  ┌──────────────────────────────────────────────────┐ │ │
@@ -95,15 +107,18 @@
 
 **Key Responsibilities:**
 - 스테이블 코인 유동성 관리
-- GLP 토큰 발행/소각
 - 포지션 오픈/종료 검증
 - 담보 및 예약 금액 추적
 - 토큰별 오픈 인터레스트 관리
 - 수수료 수집 및 분배
+- **NFT 기반 UTXO 식별** ✨
 
 **State (VaultDatum):**
 ```aiken
 pub type VaultDatum {
+  // Vault identification (unique NFT)
+  vault_nft: AssetClass,  // ← NEW: Ensures only one canonical Vault
+  
   // Liquidity pool
   stablecoin: AssetClass,
   total_liquidity: Int,
@@ -124,6 +139,52 @@ pub type VaultDatum {
   
   // Parameters
   admin, fees, leverage, ...
+}
+```
+
+### Vault NFT Policy
+
+**Purpose**: Vault UTXO의 고유 식별자 발행
+
+**Key Features:**
+- **One-time mint**: 초기화 시 단 한 번만 NFT 발행
+- **Unique identifier**: 정확한 Vault UTXO 식별
+- **Immutable**: 발행 후 재발행 불가능
+
+**Minting Rules:**
+```aiken
+minting {
+  fn vault_nft_policy(utxo_ref: OutputReference, ctx: ScriptContext) -> Bool {
+    // 1. 지정된 UTXO가 소비되어야 함 (one-time trigger)
+    // 2. 정확히 1개의 NFT만 발행
+    // 3. 재발행 불가 (immutability)
+  }
+}
+```
+
+**Why NFT?**
+- ✅ **고유성 보장**: 같은 주소에 여러 Vault UTXO가 있어도 구분 가능
+- ✅ **안전한 참조**: GLP Policy와 Backend가 정확한 Vault 찾기
+- ✅ **간단한 검증**: NFT 존재 여부만 확인하면 됨
+
+### GLP Token Policy
+
+**Purpose**: GLP 토큰 발행 및 소각 관리
+
+**Key Responsibilities:**
+- Vault의 유동성 작업과 연동하여 GLP 발행
+- Vault NFT로 정확한 Vault 식별
+- AddLiquidity/RemoveLiquidity 검증
+
+**Parameters:**
+```aiken
+minting {
+  fn glp_policy(vault_nft: AssetClass, ctx: ScriptContext) -> Bool {
+    // vault_nft로 Vault UTXO 찾기 (주소 기반 ❌)
+    let vault_input = find_input_with_nft(inputs, vault_nft)
+    let vault_output = find_output_with_nft(outputs, vault_nft)
+    // ...
+  }
 }
 ```
 
@@ -218,19 +279,23 @@ Step 5: Result
 
 **Vault UTXO:**
 ```
-┌──────────────────────────────┐
-│  UTXO: abc123#0             │
-├──────────────────────────────┤
-│  Address: Vault Script       │
-│  Value: 1,000,000 USDC +2 ADA│
-│  Datum (Inline):             │
-│    VaultDatum {              │
-│      stablecoin: USDC,       │
-│      total_liquidity: 1M,    │
-│      reserved_amounts: [...],│
-│      ...                     │
-│    }                         │
-└──────────────────────────────┘
+┌──────────────────────────────────────┐
+│  UTXO: abc123#0                     │
+├──────────────────────────────────────┤
+│  Address: Vault Script               │
+│  Value:                              │
+│    - 1,000,000 USDC                  │
+│    - 1 Vault NFT (unique!) ✨        │
+│    - 2 ADA                           │
+│  Datum (Inline):                     │
+│    VaultDatum {                      │
+│      vault_nft: AssetClass(...),     │
+│      stablecoin: USDC,               │
+│      total_liquidity: 1M,            │
+│      reserved_amounts: [...],        │
+│      ...                             │
+│    }                                 │
+└──────────────────────────────────────┘
 ```
 
 **Position UTXO:**
@@ -356,8 +421,14 @@ eUTXO guarantees:
 
 ### On-chain
 - **Language**: Aiken
-- **Validators**: Vault, Position, Oracle
-- **Tokens**: GLP (Native Token)
+- **Validators**: 
+  - Vault (spending validator)
+  - Position (spending validator)
+  - Oracle (spending validator)
+- **Minting Policies**: 
+  - Vault NFT (one-time mint)
+  - GLP Token (coordinated with Vault)
+- **Native Tokens**: GLP, Vault NFT
 
 ### Off-chain
 - **Language**: TypeScript

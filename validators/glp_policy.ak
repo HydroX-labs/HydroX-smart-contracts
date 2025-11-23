@@ -1,24 +1,31 @@
-use aiken/transaction.{ScriptContext, Mint}
+use aiken/transaction.{ScriptContext, Mint, Input, Output, Datum, InlineDatum, Redeemer, ScriptPurpose, Spend}
 use aiken/transaction/value
 use aiken/list
 use aiken/dict
-use baobabx_gmx/types.{VaultDatum, VaultRedeemer, AddLiquidity, RemoveLiquidity}
+use baobabx_gmx/types.{VaultDatum, VaultRedeemer, AddLiquidity, RemoveLiquidity, AssetClass}
 use baobabx_gmx/vault_utils
+use baobabx_gmx/common
 
 /// GLP Token Minting Policy
 /// This policy ensures GLP tokens can only be minted/burned by the Vault
 /// in accordance with AddLiquidity/RemoveLiquidity operations
+/// 
+/// Parameters:
+/// - vault_nft: The unique NFT that identifies the canonical Vault UTXO
 minting {
-  fn glp_policy(vault_script_hash: ByteArray, ctx: ScriptContext) -> Bool {
+  fn glp_policy(vault_nft: AssetClass, ctx: ScriptContext) -> Bool {
     when ctx.purpose is {
       Mint(own_policy_id) -> {
         // Get the minted/burned amount
         let minted_value = value.from_minted_value(ctx.transaction.mint)
         let glp_amount = get_glp_amount(minted_value, own_policy_id)
         
-        // Check if Vault is involved in this transaction
-        let vault_input = find_vault_input(ctx.transaction.inputs, vault_script_hash)
-        let vault_output = find_vault_output(ctx.transaction.outputs, vault_script_hash)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // CRITICAL: Find Vault by NFT (not by script address!)
+        // This ensures we're interacting with the correct Vault
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        let vault_input = common.find_input_with_nft(ctx.transaction.inputs, vault_nft)
+        let vault_output = common.find_output_with_nft(ctx.transaction.outputs, vault_nft)
         
         when (vault_input, vault_output) is {
           (Some(input), Some(output)) -> {
@@ -125,31 +132,12 @@ fn get_glp_amount(minted_value: value.Value, policy_id: ByteArray) -> Int {
   }
 }
 
-/// Find Vault input UTXO
-fn find_vault_input(inputs: List<Input>, vault_script_hash: ByteArray) -> Option<Input> {
-  list.find(
-    inputs,
-    fn(input) {
-      when input.output.address.payment_credential is {
-        ScriptCredential(hash) -> hash == vault_script_hash
-        _ -> False
-      }
-    },
-  )
-}
-
-/// Find Vault output UTXO
-fn find_vault_output(outputs: List<Output>, vault_script_hash: ByteArray) -> Option<Output> {
-  list.find(
-    outputs,
-    fn(output) {
-      when output.address.payment_credential is {
-        ScriptCredential(hash) -> hash == vault_script_hash
-        _ -> False
-      }
-    },
-  )
-}
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Note: Vault finding functions removed
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// We now use common.find_input_with_nft() and common.find_output_with_nft()
+// which are more secure as they identify the Vault by its unique NFT
+// rather than just the script address.
 
 /// Parse Vault datum from output
 fn parse_vault_datum(datum: Datum) -> VaultDatum {
