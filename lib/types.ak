@@ -27,6 +27,8 @@ pub type Position {
 
 /// Vault state datum - Stablecoin pool with multi-asset positions
 pub type VaultDatum {
+  // Unique NFT for Vault identification (ensures only one canonical Vault UTXO)
+  vault_nft: AssetClass,
   // Stablecoin used (e.g., USDC, USDT, or Cardano stablecoin)
   stablecoin: AssetClass,
   // Total stablecoin liquidity in pool

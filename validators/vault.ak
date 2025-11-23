@@ -16,7 +16,18 @@ validator {
   fn vault(datum: VaultDatum, redeemer: VaultRedeemer, ctx: ScriptContext) -> Bool {
     when ctx.purpose is {
       Spend(_) -> {
-        when redeemer is {
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // CRITICAL: Verify Vault NFT is preserved in all operations
+        // This ensures we're interacting with the correct Vault UTXO
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        let nft_preserved = common.validate_nft_preserved(
+          ctx.transaction.inputs,
+          ctx.transaction.outputs,
+          datum.vault_nft,
+        )
+        
+        // Execute specific redeemer validation
+        let redeemer_valid = when redeemer is {
           AddLiquidity { amount } -> {
             validate_add_liquidity(datum, amount, ctx)
           }
@@ -67,6 +78,9 @@ validator {
             validate_update_funding_rate(datum, ctx)
           }
         }
+        
+        // Both NFT preservation and redeemer-specific validation must pass
+        nft_preserved && redeemer_valid
       }
       _ -> False
     }
