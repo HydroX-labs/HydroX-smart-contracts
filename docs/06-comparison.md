@@ -2,7 +2,7 @@
 
 ## Feature Comparison
 
-| Feature | GMX v1 (Ethereum) | BaobabX (Cardano) | Notes |
+| Feature | GMX v1 (Ethereum) | HydroX (Cardano) | Notes |
 |---------|-------------------|-------------------|-------|
 | **Core Concept** |
 | Single liquidity pool | ✅ | ✅ | Same |
@@ -58,7 +58,7 @@ contract Vault {
 }
 ```
 
-**BaobabX (Cardano):**
+**HydroX (Cardano):**
 ```aiken
 validator vault {
   fn increase_position(...) -> Bool {
@@ -83,7 +83,7 @@ User → TX → Mempool → Miner → EVM → State Change
                           Can fail
 ```
 
-**BaobabX:**
+**HydroX:**
 ```
 User → Backend → Build → Validate → Sign → Submit → Validator
                    ↑                                    ↑
@@ -282,7 +282,7 @@ More infrastructure needed!
 
 ## Conclusion
 
-BaobabX GMX brings GMX v1's innovation to Cardano with:
+HydroX brings GMX v1's innovation to Cardano with:
 
 **Same core mechanics:**
 - Single pool, multi-asset

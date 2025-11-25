@@ -392,10 +392,10 @@ Plus: Trader losses added to pool
 
 ## Next Steps
 
-더 자세한 구현 내용:
+For deeper implementation details:
 
-- **[Implementation Guide](04-implementation.md)** - 코드 상세
-- **[Multi-Asset Design](multi-asset-design.md)** - 멀티 에셋 심화
+- **[Implementation Guide](04-implementation.md)** – validator walkthroughs and helper functions.
+- **[Multi-Asset Design](multi-asset-design.md)** – extended coverage of per-market tracking and risk controls.
 
 ---
 

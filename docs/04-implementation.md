@@ -1,11 +1,11 @@
 # Implementation Guide
 
-이 문서는 스마트 컨트랙트의 실제 구현 세부사항을 다룹니다.
+This document covers the concrete smart-contract implementation details for HydroX.
 
 ## Code Structure
 
 ```
-baobabX-smart-contracts/
+HydroX-smart-contracts/
 ├── lib/
 │   ├── types.ak          # Type definitions
 │   ├── constants.ak      # Global constants
@@ -78,7 +78,7 @@ pub type Position {
 
 ### Vault NFT Policy
 
-Vault의 고유성을 보장하기 위한 one-time NFT minting:
+One-time NFT minting guarantees the vault’s uniqueness:
 
 ```aiken
 // validators/vault_nft.ak
@@ -87,13 +87,13 @@ minting {
   fn vault_nft_policy(utxo_ref: OutputReference, ctx: ScriptContext) -> Bool {
     expect Mint(own_policy_id) = ctx.purpose
     
-    // Rule 1: 지정된 UTXO가 반드시 소비되어야 함
+    // Rule 1: the specified UTXO must be consumed
     let has_required_utxo = list.any(
       ctx.transaction.inputs,
       fn(input) { input.output_reference == utxo_ref }
     )
     
-    // Rule 2: 정확히 1개의 NFT만 발행
+    // Rule 2: exactly one NFT can be minted
     let total_minted = get_total_minted(ctx.transaction.mint, own_policy_id)
     let is_single_nft = total_minted == 1
     
@@ -102,14 +102,14 @@ minting {
 }
 ```
 
-**사용 흐름:**
-1. 관리자가 초기화 UTXO 선택 (예: `abc123#0`)
-2. 이 UTXO를 참조하여 `vault_nft.ak` 컴파일
-3. 트랜잭션에서:
-   - `abc123#0` 소비
-   - Vault NFT 1개 발행
-   - Vault UTXO 생성 (NFT 포함)
-4. **재발행 불가**: 동일한 UTXO는 다시 소비할 수 없음
+**How it is used:**
+1. The deployer selects an initialization UTXO (e.g., `abc123#0`).
+2. Compile `vault_nft.ak` with that reference baked in.
+3. During deployment:
+   - Spend `abc123#0`
+   - Mint exactly one vault NFT
+   - Create the vault UTXO that holds the NFT
+4. **No re-minting**: the same UTXO cannot be consumed again, so the NFT supply stays 1.
 
 ### NFT Validation Utilities
 
@@ -454,10 +454,10 @@ test liquidation_underwater() {
 
 ### Integration Tests
 
-실제 트랜잭션 테스트:
-1. Add liquidity flow
-2. Open position flow
-3. Close position flow
+Full transaction simulations should cover:
+1. Add-liquidity flow
+2. Open-position flow
+3. Close-position flow
 4. Liquidation flow
 
 ## Best Practices
@@ -492,7 +492,7 @@ const basis_points_divisor = 10000
 
 ## GLP Token Policy
 
-GLP 발행은 **반드시 Vault와 연동**되어야 합니다:
+GLP mint/burn must **always** align with vault state transitions:
 
 ```aiken
 // validators/glp_policy.ak
@@ -531,10 +531,10 @@ minting {
 }
 ```
 
-**핵심 로직:**
-- ✅ NFT로 정확한 Vault 찾기
-- ✅ Vault의 AddLiquidity/RemoveLiquidity만 허용
-- ✅ GLP 발행량 검증 (AUM 기반)
+**Key invariants:**
+- ✅ Locate the vault via NFT, never by script address.
+- ✅ Only allow `AddLiquidity` / `RemoveLiquidity` redeemers to mint/burn.
+- ✅ Verify GLP amounts against vault AUM math.
 
 ## Security Considerations
 
@@ -584,11 +584,11 @@ cardano-cli transaction build ...
 
 ## Next Steps
 
-더 자세한 내용:
+Dig into:
 
-- **실제 코드**: `../lib/` and `../validators/`
+- **Source code**: `../lib/` and `../validators/`
 - **Off-chain**: [Off-chain Services](offchain-services.md)
-- **비교**: [GMX Comparison](06-comparison.md)
+- **Comparison**: [GMX v1 Comparison](06-comparison.md)
 
 ---
 

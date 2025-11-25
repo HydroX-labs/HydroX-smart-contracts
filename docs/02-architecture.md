@@ -103,15 +103,15 @@
 
 ### Vault Contract
 
-**Purpose**: 중앙 유동성 풀 및 포지션 관리
+**Purpose**: Core liquidity pool and position state machine.
 
 **Key Responsibilities:**
-- 스테이블 코인 유동성 관리
-- 포지션 오픈/종료 검증
-- 담보 및 예약 금액 추적
-- 토큰별 오픈 인터레스트 관리
-- 수수료 수집 및 분배
-- **NFT 기반 UTXO 식별** ✨
+- Track stablecoin liquidity and GLP supply.
+- Validate position open/close actions.
+- Maintain collateral and reserved balances.
+- Monitor per-token open interest and funding.
+- Collect and redistribute protocol fees.
+- Preserve the unique vault NFT per UTXO. ✨
 
 **State (VaultDatum):**
 ```aiken
@@ -144,43 +144,43 @@ pub type VaultDatum {
 
 ### Vault NFT Policy
 
-**Purpose**: Vault UTXO의 고유 식별자 발행
+**Purpose**: Mint the single NFT that canonically identifies the vault UTXO.
 
 **Key Features:**
-- **One-time mint**: 초기화 시 단 한 번만 NFT 발행
-- **Unique identifier**: 정확한 Vault UTXO 식별
-- **Immutable**: 발행 후 재발행 불가능
+- **One-time mint** during deployment.
+- **Unique identifier** that pairs off-chain services with the correct UTXO.
+- **Immutable** supply—no re-minting allowed.
 
 **Minting Rules:**
 ```aiken
 minting {
   fn vault_nft_policy(utxo_ref: OutputReference, ctx: ScriptContext) -> Bool {
-    // 1. 지정된 UTXO가 소비되어야 함 (one-time trigger)
-    // 2. 정확히 1개의 NFT만 발행
-    // 3. 재발행 불가 (immutability)
+    // 1. The designated bootstrap UTXO must be spent
+    // 2. Exactly one NFT is minted
+    // 3. No ability to mint again (immutability)
   }
 }
 ```
 
-**Why NFT?**
-- ✅ **고유성 보장**: 같은 주소에 여러 Vault UTXO가 있어도 구분 가능
-- ✅ **안전한 참조**: GLP Policy와 Backend가 정확한 Vault 찾기
-- ✅ **간단한 검증**: NFT 존재 여부만 확인하면 됨
+**Why an NFT?**
+- ✅ Guarantees uniqueness even if multiple UTXOs reside at the same script address.
+- ✅ Lets GLP policy and backend services find the vault deterministically.
+- ✅ Keeps validation simple: check for NFT presence.
 
 ### GLP Token Policy
 
-**Purpose**: GLP 토큰 발행 및 소각 관리
+**Purpose**: Govern GLP minting and burning.
 
 **Key Responsibilities:**
-- Vault의 유동성 작업과 연동하여 GLP 발행
-- Vault NFT로 정확한 Vault 식별
-- AddLiquidity/RemoveLiquidity 검증
+- Sync GLP supply changes with vault state transitions.
+- Use the vault NFT to ensure the correct UTXO is touched.
+- Enforce AddLiquidity / RemoveLiquidity constraints.
 
 **Parameters:**
 ```aiken
 minting {
   fn glp_policy(vault_nft: AssetClass, ctx: ScriptContext) -> Bool {
-    // vault_nft로 Vault UTXO 찾기 (주소 기반 ❌)
+    // locate the vault UTXO via NFT (no address assumptions)
     let vault_input = find_input_with_nft(inputs, vault_nft)
     let vault_output = find_output_with_nft(outputs, vault_nft)
     // ...
@@ -190,7 +190,7 @@ minting {
 
 ### Position Contract
 
-**Purpose**: 개별 포지션 관리 및 소유권
+**Purpose**: Track ownership and lifecycle of every leveraged position.
 
 **State (PositionDatum):**
 ```aiken
@@ -208,7 +208,7 @@ pub type Position {
 
 ### Oracle Contract
 
-**Purpose**: 신뢰할 수 있는 가격 피드
+**Purpose**: Provide an auditable price feed UTXO.
 
 **State (OracleDatum):**
 ```aiken
@@ -318,7 +318,7 @@ Step 5: Result
 
 ### Off-chain State (Database)
 
-**Purpose:** 빠른 조회 및 분석
+**Purpose:** Enable fast queries, analytics, and historical tracking.
 
 **Tables:**
 - `vaults`: Current vault state
@@ -453,11 +453,11 @@ eUTXO guarantees:
 
 ## Next Steps
 
-더 자세한 내용은 다음 문서를 참조하세요:
+Continue with:
 
-- **[Core Logic](03-core-logic.md)** - 동작 원리 상세
-- **[Implementation](04-implementation.md)** - 코드 구현
-- **[Off-chain Services](offchain-services.md)** - 백엔드 서비스
+- **[Core Logic](03-core-logic.md)** – fee math, funding, and liquidation flows.
+- **[Implementation](04-implementation.md)** – validator structure and code organization.
+- **[Off-chain Services](offchain-services.md)** – supporting infrastructure.
 
 ---
 

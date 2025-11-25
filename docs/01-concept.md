@@ -2,296 +2,136 @@
 
 ## Vision
 
-BaobabX GMX는 GMX v1의 혁신적인 설계를 Cardano 블록체인에 구현한 탈중앙화 영구선물 거래소입니다. Cardano의 eUTXO 모델을 활용하여 예측 가능하고 안전한 레버리지 거래 환경을 제공합니다.
+HydroX brings the proven GMX v1 perpetual model to Cardano. By leaning on the eUTXO ledger and Aiken smart contracts, the protocol delivers predictable, transparent leverage trading while keeping capital inside a single stablecoin vault.
 
 ## Core Innovation
 
-### 단일 스테이블 코인 풀 + 멀티 에셋 포지션
+### One Stablecoin Pool, Many Markets
 
 ```
 ┌─────────────────────────────────────────┐
-│       Single USDC Liquidity Pool        │
+│      Single Stablecoin Liquidity Pool   │
+│        (e.g., USDC / iUSD / USDA)       │
 │                                         │
-│  Total Liquidity: 1,000,000 USDC       │
+│  Total Liquidity: 1,000,000 USD         │
 │                                         │
 │  ┌───────────────────────────────────┐ │
 │  │  BTC Long/Short Positions         │ │
 │  │  ETH Long/Short Positions         │ │
 │  │  ADA Long/Short Positions         │ │
 │  │  SOL Long/Short Positions         │ │
-│  │  ... (Any Whitelisted Token)      │ │
+│  │  ... any whitelisted market       │ │
 │  └───────────────────────────────────┘ │
 │                                         │
-│  All positions share same USDC pool!   │
+│  Every position settles against        │
+│  the same stablecoin reserve.          │
 └─────────────────────────────────────────┘
 ```
 
-**핵심 특징:**
-- ✅ 하나의 스테이블 코인 유동성 풀 (단순함)
-- ✅ 여러 자산에 대한 롱/숏 포지션 (다양성)
-- ✅ 자본 효율성 극대화
-- ✅ 위험 분산 효과
+Highlights:
+- Stablecoin-only collateral keeps accounting simple.
+- Shared liquidity unlocks capital efficiency across markets.
+- Risk naturally diversifies across trader positions.
 
 ## Key Features
 
-### For Liquidity Providers (LP)
+### For Liquidity Providers
 
-**GLP 토큰**
-- 유동성 공급의 대가로 네이티브 토큰 수령
-- Cardano 네이티브 토큰 (ERC-20이 아님)
-- 언제든 소각하여 스테이블 코인으로 회수 가능
+- **GLP-style receipts**: Providers receive a Cardano native token that tracks their vault share. Burn anytime to withdraw stablecoins (subject to reserved liquidity).
+- **Fee capture**: Earn a share of position open/close fees, mint/burn fees, and liquidation penalties. Parameters default to 30 bps but are configurable.
+- **Trader PnL flow**: Trader losses accrue to the vault; trader profits come out of it. LPs effectively take the opposing side of leveraged traders.
+- **Passive diversification**: Exposure spans every whitelisted index token, so losses on one market can be offset by gains on another.
 
-**수수료 수익**
-- 모든 거래 수수료의 일부 획득
-- 포지션 오픈/종료 수수료 (0.3%)
-- GLP 발행/소각 수수료 (0.3%)
-
-**트레이더 손실 = LP 이익**
-- 제로섬 게임 구조
-- 트레이더가 손실 → LP 이익
-- 트레이더가 이익 → LP 손실 (위험)
-
-**포트폴리오 효과**
-- 여러 토큰에 자동 분산 투자
-- BTC, ETH, ADA 등 모든 거래에서 수익
-- 한 토큰의 손실이 다른 토큰으로 상쇄 가능
-
-**예시:**
+Example:
 ```
-Alice가 10,000 USDC 예치:
-→ 9,970 GLP 받음 (0.3% 수수료)
-→ BTC 트레이더 수수료 받음
-→ ETH 트레이더 수수료 받음
-→ 트레이더 손실 시 이익
-→ 언제든 GLP 소각하여 USDC 회수
+Alice deposits 10,000 USD stablecoin
+→ Receives ~9,970 GLP after the 0.3% mint fee
+→ Starts accruing fees from BTC/ETH/ADA traders
+→ Benefits when traders lose, but bears their profits
+→ Burns GLP later to reclaim her share
 ```
 
 ### For Traders
 
-**레버리지 거래**
-- 최대 50x 레버리지 (설정 가능)
-- 적은 담보로 큰 포지션 가능
-- 예: 1,000 USDC로 50,000 USD 포지션
+- **Leverage up to 50x** (tunable). Lock 1,000 USD to control a 50,000 USD position.
+- **Long and short** exposure on every listed index token using the same stablecoin collateral.
+- **Funding rate** mechanism (GMX-style) nudges the market back toward balance: the crowded side pays the other.
+- **Transparent liquidation rules**: when collateral ratio drops below 1% (after deducting fees), positions are liquidated with a deterministic penalty.
 
-**롱/숏 모두 가능**
-- 롱: 가격 상승 베팅
-- 숏: 가격 하락 베팅
-- 양방향 전략 가능
-
-**멀티 에셋**
-- BTC, ETH, ADA, SOL 등
-- 화이트리스트에 있는 모든 토큰
-- 같은 USDC 담보로 거래
-
-**펀딩 비율**
-- 롱/숏 밸런싱 메커니즘
-- 많은 쪽이 적은 쪽에게 지급
-- 불균형 방지
-
-**예측 가능한 청산**
-- 명확한 청산 조건 (담보 비율 < 1%)
-- 사전에 계산 가능
-- 투명한 규칙
-
-**예시:**
+Example:
 ```
-Bob이 BTC 롱 포지션:
-→ 담보: 1,000 USDC
-→ 레버리지: 10x
-→ 포지션: 10,000 USD
-→ BTC 10% 상승 → 1,000 USD 이익 (100% 수익!)
-→ BTC 10% 하락 → 청산 위험
+Bob opens a BTC long
+Collateral: 1,000 USD
+Leverage: 10x
+Position size: 10,000 USD
+BTC +10% → +1,000 USD (100% return on collateral)
+BTC −10% → liquidation warning
 ```
 
-## Why This Design?
+## Why This Architecture?
 
-### 1. 자본 효율성
+1. **Capital efficiency** – Instead of splitting 300k USD across three asset pools, HydroX concentrates the same 300k into a single vault that all markets use, enabling larger trades and tighter spreads.
+2. **Risk pooling** – LP PnL reflects aggregate trader activity. A BTC crash might benefit LPs while ETH trades remain neutral, smoothing outcomes.
+3. **User simplicity** – Traders only manage one stablecoin wallet; no asset swaps or multi-collateral UX. Positions are denominated in USD, making margins intuitive.
 
-**전통적 방식 (분리된 풀):**
+## Traditional DEX vs HydroX
+
+| Aspect            | Traditional DEX (Spot)      | HydroX (Perps)             |
+|-------------------|-----------------------------|----------------------------|
+| Exposure          | Must hold the asset         | Uses stablecoin collateral |
+| Shorts            | Not available               | Native shorting            |
+| Leverage          | 1x                          | Up to 50x                  |
+| PnL               | Price change                | Leverage × price change    |
+| Fees              | Swap fees per trade         | Entry/exit + funding       |
+
+Example:
 ```
-BTC Pool: 100,000 USD
-ETH Pool: 100,000 USD
-ADA Pool: 100,000 USD
-────────────────────────
-Total: 300,000 USD (분산됨)
-```
+BTC climbs 10%
 
-**GMX 방식 (단일 풀):**
-```
-Single USDC Pool: 300,000 USD
-→ BTC, ETH, ADA 모두 사용 가능
-→ 유동성 집중 → 더 큰 포지션 가능
-```
+Spot (Uniswap):
+→ Buy BTC with 1,000 USD
+→ Profit: 100 USD (10%)
 
-### 2. 위험 분산
-
-**LP 관점:**
-```
-BTC 폭락 시:
-→ BTC 롱 포지션 손실 (LP 이익)
-→ ETH, ADA는 영향 적음
-→ 전체적으로 손실 분산
-```
-
-### 3. 사용자 경험
-
-**단순함:**
-- 하나의 스테이블 코인만 필요
-- 복잡한 스왑 불필요
-- USD 단위로 이해 쉬움
-
-**유연성:**
-- 여러 자산 동시 거래 가능
-- 다양한 전략 구사 가능
-- 포트폴리오 구성 자유
-
-## Comparison with Traditional DEX
-
-| 항목 | Traditional DEX | BaobabX GMX |
-|------|-----------------|-------------|
-| 거래 방식 | 스팟 거래 | 레버리지 거래 |
-| 포지션 | 자산 보유 필요 | 담보만 있으면 됨 |
-| 숏 포지션 | 불가능 | 가능 |
-| 레버리지 | 없음 | 최대 50x |
-| 가격 노출 | 매수한 양만큼 | 레버리지로 증폭 |
-| 수익률 | 가격 변동률 | 레버리지 * 가격 변동률 |
-
-**예시:**
-```
-BTC 10% 상승 시:
-
-Uniswap (스팟):
-→ 1,000 USDC로 BTC 매수
-→ 이익: 100 USDC (10%)
-
-BaobabX GMX (10x 레버리지):
-→ 1,000 USDC 담보
-→ 10,000 USD 포지션
-→ 이익: 1,000 USDC (100%)
+HydroX (10x):
+→ 1,000 USD collateral
+→ 10,000 USD position
+→ Profit: 1,000 USD (100%)
 ```
 
-## Risk Warning
+## Risk Notes
 
-### For LPs
+### Liquidity Providers
+- Trader gains reduce vault equity; prolonged bull runs favor traders.
+- Reserved liquidity cannot be withdrawn until positions settle, so exit capacity depends on utilization.
+- Monitoring oracle integrity and funding parameters is essential before depositing.
 
-**트레이더 이익 = LP 손실**
-- 트레이더가 크게 성공하면 LP 손실
-- 분산 효과가 있지만 위험 존재
-- 장기적으로는 수수료로 상쇄 기대
+### Traders
+- High leverage increases liquidation probability; once the collateral ratio < 1%, liquidation is automatic.
+- Funding can accumulate quickly when the market is imbalanced.
+- Fast price swings on Cardano L1 still matter: on-chain latency means risk management should be conservative.
 
-**유동성 락**
-- 포지션에 예약된 금액은 인출 불가
-- 사용률이 높으면 인출 제한
+## Common Use Cases
 
-### For Traders
-
-**청산 위험**
-- 높은 레버리지 = 높은 청산 위험
-- 담보 비율 1% 미만 시 청산
-- 청산 시 담보 손실
-
-**펀딩 비율**
-- 불균형 시 지속적으로 비용 발생
-- 롱이 많으면 롱 홀더가 지급
-- 장기 포지션 시 누적됨
-
-**변동성**
-- 높은 레버리지 = 높은 변동성
-- 급격한 가격 변동 시 즉시 청산 가능
-- 리스크 관리 필수
-
-## Use Cases
-
-### 1. 헤징 (Hedging)
-
-```
-시나리오: Alice는 1 BTC를 보유 중
-
-전략: BTC 숏 포지션 오픈
-→ BTC 가격 하락 → 숏 포지션 이익으로 상쇄
-→ BTC 가격 상승 → 보유 BTC 가치 상승
-
-결과: 가격 변동 위험 헤징
-```
-
-### 2. 방향성 베팅 (Directional Betting)
-
-```
-시나리오: Bob은 ETH가 오를 것으로 예상
-
-전략: ETH 롱 포지션 (10x)
-→ 담보: 500 USDC
-→ 포지션: 5,000 USD
-→ ETH 20% 상승 → 1,000 USDC 이익 (200% 수익!)
-
-결과: 레버리지로 수익 극대화
-```
-
-### 3. 차익거래 (Arbitrage)
-
-```
-시나리오: Carol은 펀딩 비율 차익 발견
-
-전략:
-→ Platform A에서 BTC 롱 (음수 펀딩)
-→ Platform B에서 BTC 숏 (양수 펀딩)
-→ 양쪽에서 펀딩 수익
-
-결과: 무위험 펀딩 차익
-```
-
-### 4. 포트폴리오 증폭 (Leverage Portfolio)
-
-```
-시나리오: David는 전체 암호화폐 시장 상승 예상
-
-전략:
-→ BTC 롱 (5x)
-→ ETH 롱 (5x)
-→ ADA 롱 (5x)
-
-결과: 분산된 레버리지 포지션
-```
+1. **Hedging** – Lock in USD value by shorting the asset you hold elsewhere.
+2. **Directional conviction** – Express bullish or bearish views with capital-efficient leverage.
+3. **Funding arbitrage** – Capture positive/negative funding spreads between HydroX and other venues.
+4. **Leveraged portfolio** – Build a basket of moderate-leverage longs (or shorts) using one collateral wallet.
 
 ## Design Principles
 
-### 1. 단순함 (Simplicity)
-
-- 하나의 스테이블 코인만 사용
-- 명확한 USD 가격
-- 직관적인 인터페이스
-
-### 2. 투명성 (Transparency)
-
-- 모든 계산은 공개
-- 수수료 명확히 표시
-- 청산 조건 사전 공지
-
-### 3. 효율성 (Efficiency)
-
-- 자본 효율 극대화
-- 낮은 거래 비용
-- 빠른 실행
-
-### 4. 안전성 (Security)
-
-- 감사된 스마트 컨트랙트
-- 명확한 청산 메커니즘
-- 위험 관리 파라미터
-
-### 5. 탈중앙화 (Decentralization)
-
-- 무허가 청산
-- 오픈 소스
-- 커뮤니티 거버넌스 (향후)
+1. **Simplicity** – USD-denominated accounting, single collateral type, minimal redemption paths.
+2. **Transparency** – All formulas, parameters, and liquidation rules are on-chain and documented.
+3. **Efficiency** – Concentrated liquidity, predictable fees, and streamlined redeemers keep transactions lean.
+4. **Safety** – Auditable contracts, conservative defaults, and incentive-aligned liquidations.
+5. **Decentralization** – Anyone can provide liquidity, trade, liquidate, or update prices (with proper credentials); governance will progressively decentralize.
 
 ## Next Steps
 
-이 컨셉을 이해했다면, 다음 문서를 읽어보세요:
+Ready to dive deeper?
 
-1. **[Architecture Overview](02-architecture.md)** - 시스템 구조
-2. **[Core Logic](03-core-logic.md)** - 동작 원리
-3. **[Multi-Asset Design](multi-asset-design.md)** - 멀티 에셋 상세 설계
+1. **[Architecture Overview](02-architecture.md)** – smart-contract topology and data models.
+2. **[Core Logic](03-core-logic.md)** – fee math, PnL flows, and validation rules.
+3. **[Multi-Asset Design](multi-asset-design.md)** – token whitelisting and oracle considerations.
 
 ---
 

@@ -1,6 +1,6 @@
-# BaobabX GMX Documentation
+# HydroX Documentation
 
-Complete documentation for BaobabX GMX - Decentralized Perpetual Futures Exchange on Cardano
+Complete documentation for HydroX – a GMX v1-style decentralized perpetual futures exchange on Cardano.
 
 ---
 
@@ -95,7 +95,7 @@ Complete documentation for BaobabX GMX - Decentralized Perpetual Futures Exchang
 ## 📁 Repository Structure
 
 ```
-baobabX-smart-contracts/
+HydroX-smart-contracts/
 ├── docs/                          # Documentation (you are here)
 │   ├── README.md                  # This file
 │   ├── 01-concept.md

@@ -14,16 +14,22 @@ Full documentation lives in `docs/`. Start here if you are exploring the design:
 ## Architecture Snapshot
 
 - **Vault validator (`validators/vault.ak`)**  
-  Manages the stablecoin pool, mints/burns GLP, tracks funding, fees, and reserved liquidity. Redeemers cover Add/Remove liquidity, Increase/Decrease position, Liquidate, and UpdateFundingRate.
+  Enforces that the vault NFT stays attached to every spend and routes logic through redeemers: `AddLiquidity`, `RemoveLiquidity`, `IncreasePosition`, `DecreasePosition`, `LiquidatePosition`, `UpdateFees`, and `UpdateFundingRate`. The first four currently focus on sanity checks (positive amounts, whitelist, leverage, utilization) with TODOs for full state/accounting updates. `UpdateFees` validates admin signatures and bounds, while `UpdateFundingRate` is a stub waiting for per-market math.
+
+- **GLP minting policy (`validators/glp_policy.ak`)**  
+  Mints on `AddLiquidity` and burns on `RemoveLiquidity` only when the vault UTXO (found via NFT) moves and its datum transitions match the expected liquidity/GLP math from `vault_utils`.
+
+- **Vault NFT policy (`validators/vault_nft.ak`)**  
+  One-time mint locked to a specific bootstrap UTXO reference so the vault identity can never be duplicated.
 
 - **Position validator (`validators/position.ak`)**  
-  Holds each leveraged position in its own UTXO. Datum fields: owner key hash, index token, long/short flag, size (USD @ 1e30), collateral (stablecoin @ 1e30), average price, entry funding rate, last increased time.
+  Controls each position UTXO with two redeemers: `ClosePosition` (owner or liquidator) and `UpdatePosition` (owner adjustments). Both currently require future work to enforce signatures, vault co-spend, and state transitions, mirroring the TODOs inside the validator.
 
 - **Oracle validator (`validators/oracle.ak`)**  
-  Provides batched price data (token, price @ 1e30, timestamp, confidence) under an oracle admin policy.
+  Allows `UpdatePrices` when the current admin signs and supplies a non-empty price list, and `UpdateAdmin` when the existing admin authorizes the new key. Additional freshness/confidence checks are stubbed for later.
 
 - **Utility library (`lib/utils.ak`)**  
-  Shared helpers such as `calculate_fee`, `get_aum`, `get_position_fee`, `get_funding_fee`, and `validate_liquidation`.
+  Houses shared helpers (`calculate_fee`, `get_aum`, `get_position_fee`, `get_funding_fee`, `validate_liquidation`, etc.) referenced by the validators and minting policies.
 
 ## Key Principles
 
