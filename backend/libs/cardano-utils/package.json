@@ -1,0 +1,19 @@
+{
+  "name": "@hydrox/cardano-utils",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@hydrox/types": "workspace:*",
+    "lucid-cardano": "^0.10.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}
+
