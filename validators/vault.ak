@@ -4,7 +4,7 @@ use aiken/transaction/value
 use aiken/list
 use baobabx_gmx/types.{
   VaultDatum, VaultRedeemer, AssetClass, AddLiquidity, RemoveLiquidity,
-  IncreasePosition, DecreasePosition, LiquidatePosition, UpdateFees, UpdateFundingRate,
+  IncreasePosition, DecreasePosition, LiquidatePosition, UpdateFees, UpdateFundingRate, UpdateStablecoins
 }
 use baobabx_gmx/common
 use baobabx_gmx/vault_utils
@@ -76,6 +76,10 @@ validator {
           
           UpdateFundingRate -> {
             validate_update_funding_rate(datum, ctx)
+          }
+
+          UpdateStablecoins { new_stablecoins } -> {
+            validate_update_stablecoins(datum, new_stablecoins, ctx)
           }
         }
         
@@ -376,4 +380,54 @@ fn validate_update_funding_rate(datum: VaultDatum, ctx: ScriptContext) -> Bool {
   // - last_funding_times (per token)
   
   True
+}
+
+/// Validate stablecoin update (admin only)
+fn validate_update_stablecoins(
+  datum: VaultDatum,
+  new_stablecoins: List<AssetClass>,
+  ctx: ScriptContext,
+) -> Bool {
+  // 1. Verify admin signature
+  let has_admin_sig =
+    list.any(
+      ctx.transaction.extra_signatories,
+      fn(sig) { sig == datum.admin },
+    )
+  
+  // 2. Find output vault UTXO
+  expect Some(own_output) =
+    list.find(
+      ctx.transaction.outputs,
+      fn(output) {
+        when output.address.payment_credential is {
+          ScriptCredential(_) -> True
+          _ -> False
+        }
+      },
+    )
+  
+  // 3. Parse output datum
+  expect InlineDatum(output_data) = own_output.datum
+  expect output_datum: VaultDatum = output_data
+  
+  // 4. Verify new stablecoins list is updated correctly
+  let stablecoins_updated = output_datum.stablecoins == new_stablecoins
+  
+  // 5. Verify other fields remain unchanged
+  let liquidity_unchanged = output_datum.total_liquidity == datum.total_liquidity
+  let glp_supply_unchanged = output_datum.glp_supply == datum.glp_supply
+  let admin_unchanged = output_datum.admin == datum.admin
+  let fees_unchanged = 
+    output_datum.mint_burn_fee_basis_points == datum.mint_burn_fee_basis_points &&
+    output_datum.margin_fee_basis_points == datum.margin_fee_basis_points &&
+    output_datum.liquidation_fee_usd == datum.liquidation_fee_usd
+
+  // All checks must pass
+  has_admin_sig &&
+  stablecoins_updated &&
+  liquidity_unchanged &&
+  glp_supply_unchanged &&
+  admin_unchanged &&
+  fees_unchanged
 }

@@ -117,6 +117,7 @@ pub type VaultRedeemer {
   // Admin operations
   UpdateFees
   UpdateFundingRate  // Update funding rate for long/short balancing
+  UpdateStablecoins { new_stablecoins: List<AssetClass> } // New redeemer for updating stablecoins
 }
 
 /// Redeemer for Position
