@@ -31,8 +31,8 @@ pub type VaultDatum {
   // Vault identification (unique NFT)
   vault_nft: AssetClass,
   
-  // Single stablecoin
-  stablecoin: AssetClass,
+  // Supported stablecoins (e.g., USDM, USDA, USDC)
+  stablecoins: List<AssetClass>,
   total_liquidity: Int,
   glp_supply: Int,
   
@@ -288,11 +288,11 @@ validator {
         )
         
         let redeemer_valid = when redeemer is {
-          AddLiquidity { amount } ->
-            validate_add_liquidity(datum, amount, ctx)
+          AddLiquidity { asset, amount } ->
+            validate_add_liquidity(datum, asset, amount, ctx)
           
-          RemoveLiquidity { glp_amount } ->
-            validate_remove_liquidity(datum, glp_amount, ctx)
+          RemoveLiquidity { asset, glp_amount } ->
+            validate_remove_liquidity(datum, asset, glp_amount, ctx)
           
           IncreasePosition { account, index_token, 
                             collateral_delta, size_delta, is_long } ->
@@ -516,10 +516,10 @@ minting {
         let vault_redeemer = get_vault_redeemer(...)
         
         when vault_redeemer is {
-          Some(AddLiquidity { amount }) ->
+          Some(AddLiquidity { asset, amount }) ->
             validate_add_liquidity(input_datum, output_datum, ...)
           
-          Some(RemoveLiquidity { glp_amount }) ->
+          Some(RemoveLiquidity { asset, glp_amount }) ->
             validate_remove_liquidity(input_datum, output_datum, ...)
           
           _ -> False

@@ -29,8 +29,8 @@ pub type Position {
 pub type VaultDatum {
   // Unique NFT for Vault identification (ensures only one canonical Vault UTXO)
   vault_nft: AssetClass,
-  // Stablecoin used (e.g., USDC, USDT, or Cardano stablecoin)
-  stablecoin: AssetClass,
+  // Supported stablecoins (e.g., USDM, USDA, USDC)
+  stablecoins: List<AssetClass>,
   // Total stablecoin liquidity in pool
   total_liquidity: Int,
   
@@ -91,9 +91,9 @@ pub type OracleDatum {
 
 /// Redeemer actions for Vault - Stablecoin only version
 pub type VaultRedeemer {
-  // Liquidity operations (stablecoin only)
-  AddLiquidity { amount: Int }
-  RemoveLiquidity { glp_amount: Int }
+  // Liquidity operations (multi-stablecoin)
+  AddLiquidity { asset: AssetClass, amount: Int }
+  RemoveLiquidity { asset: AssetClass, glp_amount: Int }
   // Position operations (stablecoin collateral)
   IncreasePosition {
     account: Hash<Blake2b_224, VerificationKey>,

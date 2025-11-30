@@ -28,12 +28,12 @@ validator {
         
         // Execute specific redeemer validation
         let redeemer_valid = when redeemer is {
-          AddLiquidity { amount } -> {
-            validate_add_liquidity(datum, amount, ctx)
+          AddLiquidity { asset, amount } -> {
+            validate_add_liquidity(datum, asset, amount, ctx)
           }
           
-          RemoveLiquidity { glp_amount } -> {
-            validate_remove_liquidity(datum, glp_amount, ctx)
+          RemoveLiquidity { asset, glp_amount } -> {
+            validate_remove_liquidity(datum, asset, glp_amount, ctx)
           }
           
           IncreasePosition { account, index_token, collateral_delta, size_delta, is_long } -> {
@@ -90,11 +90,15 @@ validator {
 /// Validate add liquidity operation (stablecoin deposit)
 fn validate_add_liquidity(
   datum: VaultDatum,
+  asset: AssetClass,
   amount: Int,
   ctx: ScriptContext,
 ) -> Bool {
+  // Check if asset is supported
+  let is_supported = list.has(datum.stablecoins, asset)
+
   // Amount must be positive
-  let valid_amount = amount > 0
+  let valid_amount = amount > 0 && is_supported
   
   // TODO: Verify correct amount of stablecoin deposited
   // Check transaction inputs contain user's stablecoin
@@ -116,11 +120,15 @@ fn validate_add_liquidity(
 /// Validate remove liquidity operation (GLP burn for stablecoin)
 fn validate_remove_liquidity(
   datum: VaultDatum,
+  asset: AssetClass,
   glp_amount: Int,
   ctx: ScriptContext,
 ) -> Bool {
+  // Check if asset is supported
+  let is_supported = list.has(datum.stablecoins, asset)
+
   // GLP amount must be positive
-  let valid_amount = glp_amount > 0 && glp_amount <= datum.glp_supply
+  let valid_amount = glp_amount > 0 && glp_amount <= datum.glp_supply && is_supported
   
   // TODO: Calculate stablecoin to return based on pool share
   // stablecoin_out = glp_amount * total_liquidity / glp_supply
